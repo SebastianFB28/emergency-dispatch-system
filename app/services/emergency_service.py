@@ -34,6 +34,24 @@ class EmergencyService:
         prioridad_final = min(10, max(1, score))
         return prioridad_final
 
+    def _obtener_lista_por_nombre(self, nombre_lista):
+        """Devuelve el objeto DoublyLinkedList correspondiente a un nombre de lista."""
+        mapa = {
+            "Alta Prioridad": self.high_priority_list,
+            "Media Prioridad": self.medium_priority_list,
+            "Baja Prioridad": self.low_priority_list,
+        }
+        return mapa[nombre_lista]
+
+    def _lista_por_prioridad(self, prioridad):
+        """Dado un valor de prioridad, devuelve (lista, nombre_lista) donde debe vivir."""
+        if prioridad >= 8:
+            return self.high_priority_list, "Alta Prioridad"
+        elif prioridad >= 4:
+            return self.medium_priority_list, "Media Prioridad"
+        else:
+            return self.low_priority_list, "Baja Prioridad"
+
     def register_emergency(self, nombre, direccion, descripcion, heridos, muertos, tipo):
         """
         Crea la emergencia, calcula su prioridad y la encola en la lista correcta.
@@ -69,3 +87,34 @@ class EmergencyService:
             "Media Prioridad": self.medium_priority_list.to_list(),
             "Baja Prioridad": self.low_priority_list.to_list(),
         }
+
+    def update_emergency(self, lista_actual_nombre, ticket, nombre, direccion, descripcion, heridos, muertos, tipo):
+        """
+        Actualiza los datos de una emergencia existente. Recalcula su prioridad y:
+        - si el nuevo rango es el mismo, la reordena dentro de la misma lista.
+        - si cambia de rango, la mueve a la lista que le corresponda ahora.
+        """
+        lista_actual = self._obtener_lista_por_nombre(lista_actual_nombre)
+        nodo = lista_actual.search(ticket)
+        if nodo is None:
+            return None, None
+
+        # 1. Sacamos el nodo de donde está (sin perder el objeto ni su ticket)
+        lista_actual._desenlazar(nodo)
+
+        # 2. Actualizamos sus datos y recalculamos prioridad
+        emergencia = nodo.data
+        emergencia.nombre = nombre
+        emergencia.direccion = direccion
+        emergencia.descripcion = descripcion
+        emergencia.heridos = int(heridos)
+        emergencia.muertos = int(muertos)
+        emergencia.tipo_emergencia = tipo
+        emergencia.prioridad = self._calculate_priority(emergencia)
+
+        # 3. La insertamos ordenadamente en la lista que le corresponda ahora
+        #    (puede ser la misma lista, o una distinta si cambió de rango)
+        lista_destino, nombre_lista_destino = self._lista_por_prioridad(emergencia.prioridad)
+        lista_destino._insertar_nodo_ordenado(nodo)
+
+        return nodo, nombre_lista_destino

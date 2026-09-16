@@ -1,10 +1,12 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 
 
 class EmergencyListWindow:
     def __init__(self, parent, emergency_service):
         self.emergency_service = emergency_service
+        self.selected_ticket = None
+        self.selected_lista_nombre = None
 
         self.window = tk.Toplevel(parent)
         self.window.title("Listado de Emergencias")
@@ -69,7 +71,7 @@ class EmergencyListWindow:
 
         tk.Button(
             btns_frame, text="Actualizar", bg="#5bc0de", fg="white",
-            font=("Arial", 10, "bold")
+            font=("Arial", 10, "bold"), command=self._actualizar_emergencia
         ).pack(fill="x", pady=5)
 
         tk.Button(
@@ -114,6 +116,7 @@ class EmergencyListWindow:
                 tree.column(col, width=widths[col], anchor="center")
             tree.pack(fill="x", pady=(0, 10))
 
+            tree.bind("<<TreeviewSelect>>", self._on_select)
             self.trees[nombre_lista] = tree
 
     def _cargar_datos(self):
@@ -140,3 +143,92 @@ class EmergencyListWindow:
                     emergencia.heridos,
                     emergencia.muertos,
                 ))
+
+    def _on_select(self, event):
+        """Cuando el usuario hace clic en una fila, se llenan los campos del formulario."""
+        tree = event.widget
+        seleccion = tree.selection()
+        if not seleccion:
+            return
+
+        # Identificamos de cuál de las tres listas vino el clic
+        nombre_lista = None
+        for nombre, t in self.trees.items():
+            if t is tree:
+                nombre_lista = nombre
+                break
+
+        valores = tree.item(seleccion[0])["values"]
+        ticket = valores[0]
+
+        self.selected_ticket = ticket
+        self.selected_lista_nombre = nombre_lista
+
+        # Llenamos el formulario (el ticket NO se puede editar, solo se muestra)
+        self.lbl_ticket.config(text=str(ticket))
+
+        self.entry_nombre.delete(0, tk.END)
+        self.entry_nombre.insert(0, valores[1])
+
+        self.entry_direccion.delete(0, tk.END)
+        self.entry_direccion.insert(0, valores[2])
+
+        self.text_descripcion.delete("1.0", tk.END)
+
+        self.combo_tipo.set(valores[3])
+
+        self.spin_heridos.delete(0, tk.END)
+        self.spin_heridos.insert(0, valores[5])
+
+        self.spin_muertos.delete(0, tk.END)
+        self.spin_muertos.insert(0, valores[6])
+
+        # La descripción no está en la tabla, así que la buscamos directo en el nodo
+        lista_obj = self.emergency_service._obtener_lista_por_nombre(nombre_lista)
+        nodo = lista_obj.search(ticket)
+        if nodo:
+            self.text_descripcion.insert("1.0", nodo.data.descripcion)
+
+    def _actualizar_emergencia(self):
+        """Toma los datos del formulario y actualiza la emergencia seleccionada."""
+        if self.selected_ticket is None:
+            messagebox.showwarning(
+                "Sin selección",
+                "Selecciona una emergencia de alguna lista primero.",
+                parent=self.window
+            )
+            return
+
+        nombre = self.entry_nombre.get().strip()
+        direccion = self.entry_direccion.get().strip()
+        descripcion = self.text_descripcion.get("1.0", tk.END).strip()
+        heridos = self.spin_heridos.get()
+        muertos = self.spin_muertos.get()
+        tipo = self.combo_tipo.get()
+
+        if not nombre or not direccion or not descripcion:
+            messagebox.showwarning(
+                "Campos incompletos",
+                "Por favor, complete nombre, dirección y descripción.",
+                parent=self.window
+            )
+            return
+
+        nodo, nueva_lista = self.emergency_service.update_emergency(
+            self.selected_lista_nombre, self.selected_ticket,
+            nombre, direccion, descripcion, heridos, muertos, tipo
+        )
+
+        if nodo is None:
+            messagebox.showerror("Error", "No se encontró la emergencia.", parent=self.window)
+            return
+
+        self._cargar_datos()
+
+        messagebox.showinfo(
+            "Actualizado",
+            f"Emergencia #{nodo.ticket} actualizada.\n"
+            f"Nueva prioridad: {nodo.data.prioridad}/10\n"
+            f"Lista: {nueva_lista}",
+            parent=self.window
+        )
